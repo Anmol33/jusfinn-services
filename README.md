@@ -31,7 +31,14 @@ pip install -r requirements.txt
 ```
 
 ### 3. Set up environment variables
-Copy the example environment file and configure your settings:
+
+**Option 1: Use the setup script (Recommended)**
+```bash
+python setup_env.py
+```
+
+**Option 2: Manual setup**
+Copy the environment template and configure your settings:
 ```bash
 cp env.example .env
 ```
@@ -39,16 +46,17 @@ cp env.example .env
 Edit `.env` file with your configuration:
 ```env
 # MongoDB Configuration
-MONGODB_URL=mongodb+srv://<db_username>:<db_password>@cluster0.wdorp9f.mongodb.net/
-DATABASE_NAME=jusfinn_db
+MONGODB_URL=mongodb+srv://<db_username>:<db_password>@cluster0.wdorp9f.mongodb.net/?retryWrites=true&w=majority
+DATABASE_NAME=jusfinn
+USER_MONGO_COLLECTION=user
 
 # Google OAuth2 Configuration
-GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
 
 # JWT Configuration
-JWT_SECRET_KEY=your_jwt_secret_key
+JWT_SECRET_KEY=your_super_secret_jwt_key_change_this_in_production
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 
@@ -78,7 +86,41 @@ The application is configured to use MongoDB Atlas cloud database.
 
 ## Running the Application
 
-### Development
+### Method 1: Using the Python runner script (Recommended)
+```bash
+python run_with_env.py
+```
+
+### Method 2: Using shell scripts
+
+**For macOS/Linux:**
+```bash
+chmod +x run.sh
+./run.sh
+```
+
+**For Windows:**
+```cmd
+run.bat
+```
+
+### Method 3: Manual environment variable setup
+
+**macOS/Linux:**
+```bash
+# Load environment variables and run
+export $(grep -v '^#' .env | xargs)
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Windows:**
+```cmd
+# Load environment variables and run
+for /f "tokens=1,2 delims==" %a in (.env) do set "%a=%b"
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Method 4: Direct uvicorn (requires .env file)
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
