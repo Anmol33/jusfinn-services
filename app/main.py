@@ -6,11 +6,12 @@ from database import connect_to_mongo, close_mongo_connection
 from routers import auth, users
 from config import settings
 
+
 # Load environment variables from .env file at startup
 def load_environment():
     """Load environment variables from .env file"""
     env_file = ".env"
-    
+
     # Check if .env file exists in current directory or parent directory
     if os.path.exists(env_file):
         load_dotenv(env_file)
@@ -20,6 +21,7 @@ def load_environment():
         print(f"✅ Environment variables loaded from ../{env_file}")
     else:
         print(f"⚠️  {env_file} file not found. Using system environment variables.")
+
 
 # Load environment variables before importing config
 load_environment()
@@ -77,9 +79,10 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host=settings.host,
         port=settings.port,
         reload=True
-    ) 
+    )
