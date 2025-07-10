@@ -22,6 +22,9 @@ class Settings:
         # Server Configuration
         self.host = os.environ.get("HOST", "0.0.0.0")
         self.port = int(os.environ.get("PORT", "8000"))
+        
+        # Frontend Configuration
+        self.frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:8080")
 
 
 settings = Settings()

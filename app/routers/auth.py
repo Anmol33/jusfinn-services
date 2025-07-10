@@ -6,6 +6,7 @@ from services.user_service import user_service
 from services.jwt_service import jwt_service
 from models import User, UserResponse
 from database import get_database
+from config import settings
 import json
 import urllib.parse
 
@@ -84,7 +85,7 @@ async def google_callback(code: str, state: str = None):
         encoded_data = urllib.parse.quote(json.dumps(user_data))
         
         # Redirect to frontend with user data
-        frontend_url = f"http://localhost:8080/auth/callback?data={encoded_data}"
+        frontend_url = f"{settings.frontend_url}/auth/callback?data={encoded_data}"
         return RedirectResponse(url=frontend_url)
         
     except Exception as e:
@@ -92,7 +93,7 @@ async def google_callback(code: str, state: str = None):
         # Redirect to frontend with error
         error_data = {"error": "Authentication failed"}
         encoded_error = urllib.parse.quote(json.dumps(error_data))
-        frontend_url = f"http://localhost:8080/auth/callback?error={encoded_error}"
+        frontend_url = f"{settings.frontend_url}/auth/callback?error={encoded_error}"
         return RedirectResponse(url=frontend_url)
 
 
