@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,11 +27,23 @@ def load_environment():
 # Load environment variables before importing config
 load_environment()
 
+# Lifespan context manager for startup/shutdown events
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    # Startup
+    print(f"🚀 Starting JusFinn Services on {settings.host}:{settings.port}")
+    await connect_to_mongo()
+    yield
+    # Shutdown
+    await close_mongo_connection()
+
 # Create FastAPI app
 app = FastAPI(
     title="JusFinn Services API",
     description="FastAPI backend with MongoDB and Google OAuth2 integration",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Add CORS middleware
@@ -51,19 +64,6 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router)
 app.include_router(users.router)
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Connect to MongoDB on startup."""
-    print(f"🚀 Starting JusFinn Services on {settings.host}:{settings.port}")
-    await connect_to_mongo()
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Close MongoDB connection on shutdown."""
-    await close_mongo_connection()
 
 
 @app.get("/")
