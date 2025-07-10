@@ -1,8 +1,28 @@
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import connect_to_mongo, close_mongo_connection
 from routers import auth, users
 from config import settings
+
+# Load environment variables from .env file at startup
+def load_environment():
+    """Load environment variables from .env file"""
+    env_file = ".env"
+    
+    # Check if .env file exists in current directory or parent directory
+    if os.path.exists(env_file):
+        load_dotenv(env_file)
+        print(f"✅ Environment variables loaded from {env_file}")
+    elif os.path.exists(os.path.join("..", env_file)):
+        load_dotenv(os.path.join("..", env_file))
+        print(f"✅ Environment variables loaded from ../{env_file}")
+    else:
+        print(f"⚠️  {env_file} file not found. Using system environment variables.")
+
+# Load environment variables before importing config
+load_environment()
 
 # Create FastAPI app
 app = FastAPI(
@@ -28,6 +48,7 @@ app.include_router(users.router)
 @app.on_event("startup")
 async def startup_event():
     """Connect to MongoDB on startup."""
+    print(f"🚀 Starting JusFinn Services on {settings.host}:{settings.port}")
     await connect_to_mongo()
 
 

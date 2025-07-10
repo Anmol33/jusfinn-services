@@ -1,32 +1,27 @@
 import os
 from typing import Optional
-from pydantic_settings import BaseSettings
 
 
+class Settings:
+    def __init__(self):
+        # MongoDB Configuration
+        self.mongodb_url = os.environ.get("MONGODB_URL")
+        self.database_name = os.environ.get("DATABASE_NAME")
+        self.user_mongo_collection = os.environ.get("USER_MONGO_COLLECTION")
 
-class Settings(BaseSettings):
-    # MongoDB Configuration
-    mongodb_url: str = "mongodb+srv://sanchit:sanchit123@cluster0.wdorp9f.mongodb.net/?retryWrites=true&w=majority"
-    database_name: str = "jusfinn"
-    user_mongo_collection: str = "user"
-    
-    # Google OAuth2 Configuration
-    google_client_id: str = "581557555470-mq47gdjjn1a79auusu23pm532562kv8d.apps.googleusercontent.com"
-    google_client_secret: str = "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"
-    google_redirect_uri: str = "http://localhost:8000/auth/google/callback"
-    
-    # JWT Configuration
-    jwt_secret_key: str = "your_super_secret_jwt_key_change_this_in_production"
-    jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
-    
-    # Server Configuration
-    host: str = "0.0.0.0"
-    port: int = 8000
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+        # Google OAuth2 Configuration
+        self.google_client_id = os.environ.get("GOOGLE_CLIENT_ID")
+        self.google_client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+        self.google_redirect_uri = os.environ.get("GOOGLE_REDIRECT_URI")
+
+        # JWT Configuration
+        self.jwt_secret_key = os.environ.get("JWT_SECRET_KEY")
+        self.jwt_algorithm = os.environ.get("JWT_ALGORITHM", "HS256")
+        self.access_token_expire_minutes = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+        # Server Configuration
+        self.host = os.environ.get("HOST", "0.0.0.0")
+        self.port = int(os.environ.get("PORT", "8000"))
 
 
-settings = Settings() 
+settings = Settings()
