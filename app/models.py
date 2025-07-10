@@ -21,7 +21,6 @@ class GoogleUserInfo(BaseModel):
     given_name: str
     family_name: str
     picture: str
-    locale: str
 
 
 class User(BaseModel):
@@ -33,10 +32,9 @@ class User(BaseModel):
     given_name: str
     family_name: str
     picture: str
-    locale: str
-    access_token: str
+    access_token: Optional[str] = None
     refresh_token: Optional[str] = None
-    token_expires_at: datetime
+    token_expires_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -50,8 +48,8 @@ class User(BaseModel):
                 "given_name": "John",
                 "family_name": "Doe",
                 "picture": "https://example.com/picture.jpg",
-                "locale": "en",
                 "access_token": "ya29.a0AfH6SMB...",
+                "refresh_token": "1//04dX...",
                 "token_expires_at": "2024-01-01T12:00:00Z",
                 "created_at": "2024-01-01T10:00:00Z",
                 "updated_at": "2024-01-01T10:00:00Z"
@@ -67,6 +65,5 @@ class UserResponse(BaseModel):
     given_name: str
     family_name: str
     picture: str
-    locale: str
     created_at: datetime
     updated_at: datetime 

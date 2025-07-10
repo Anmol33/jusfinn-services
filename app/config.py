@@ -3,10 +3,12 @@ from typing import Optional
 from pydantic_settings import BaseSettings
 
 
+
 class Settings(BaseSettings):
     # MongoDB Configuration
-    mongodb_url: str = "mongodb+srv://sanchit:sanchit123@cluster0.wdorp9f.mongodb.net/"
-    database_name: str = "jusfinn_db"
+    mongodb_url: str = "mongodb+srv://sanchit:sanchit123@cluster0.wdorp9f.mongodb.net/?retryWrites=true&w=majority"
+    database_name: str = "jusfinn"
+    user_mongo_collection: str = "user"
     
     # Google OAuth2 Configuration
     google_client_id: str = "581557555470-mq47gdjjn1a79auusu23pm532562kv8d.apps.googleusercontent.com"

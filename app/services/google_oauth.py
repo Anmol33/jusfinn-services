@@ -1,8 +1,12 @@
 import httpx
 from datetime import datetime, timedelta
 from typing import Optional
+import secrets
 from config import settings
 from models import GoogleOAuth2Response, GoogleUserInfo
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class GoogleOAuth2Service:
@@ -17,14 +21,18 @@ class GoogleOAuth2Service:
         self.id_token_verify_url = "https://oauth2.googleapis.com/tokeninfo"
     
     def get_authorization_url(self) -> str:
-        """Generate Google OAuth2 authorization URL."""
+        """Generate Google OAuth2 authorization URL with state parameter for security."""
+        # Generate a random state parameter for CSRF protection
+        state = secrets.token_urlsafe(32)
+        
         params = {
             "client_id": self.client_id,
             "redirect_uri": self.redirect_uri,
             "response_type": "code",
             "scope": "openid email profile",
             "access_type": "offline",
-            "prompt": "consent"
+            "prompt": "consent",
+            "state": state
         }
         
         query_string = "&".join([f"{k}={v}" for k, v in params.items()])
@@ -71,8 +79,7 @@ class GoogleOAuth2Service:
                 name=user_data["name"],
                 given_name=user_data["given_name"],
                 family_name=user_data["family_name"],
-                picture=user_data["picture"],
-                locale=user_data["locale"]
+                picture=user_data["picture"]
             )
     
     def calculate_token_expiry(self, expires_in: int) -> datetime:
@@ -107,8 +114,7 @@ class GoogleOAuth2Service:
                     name=token_data.get("name", ""),
                     given_name=token_data.get("given_name", ""),
                     family_name=token_data.get("family_name", ""),
-                    picture=token_data.get("picture", ""),
-                    locale=token_data.get("locale", "")
+                    picture=token_data.get("picture", "")
                 )
         except Exception:
             return None
