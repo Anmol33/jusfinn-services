@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
+
+from config import settings
 from database import get_database
 from models import User, UserResponse
 from bson import ObjectId
@@ -20,7 +22,7 @@ class UserService:
             if self.db is None:
                 raise Exception(
                     "Database connection not established. Please ensure the application has started properly.")
-            self.users_collection = self.db["user"]
+            self.users_collection = self.db[settings.user_mongo_collection]
 
     def _convert_objectid_to_string(self, doc):
         """Convert ObjectId to string in document."""
