@@ -3,9 +3,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import connect_to_mongo, close_mongo_connection
-from routers import auth, users
-from config import settings
+
 
 
 # Load environment variables from .env file at startup
@@ -26,6 +24,10 @@ def load_environment():
 
 # Load environment variables before importing config
 load_environment()
+
+from config import settings
+from database import connect_to_mongo, close_mongo_connection
+from routers import auth, users, clients
 
 # Lifespan context manager for startup/shutdown events
 @asynccontextmanager
@@ -64,6 +66,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(clients.router)
 
 
 @app.get("/")
