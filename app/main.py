@@ -1,7 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -27,7 +27,7 @@ load_environment()
 
 from config import settings
 from database import connect_to_mongo, close_mongo_connection
-from routers import auth, users, clients
+from routers import auth, users, clients, companies, quotations, invoices, inventory
 
 # Lifespan context manager for startup/shutdown events
 @asynccontextmanager
@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="JusFinn Services API",
-    description="FastAPI backend with MongoDB and Google OAuth2 integration",
+    description="GST-compliant Sales Workflow Management System",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -52,22 +52,32 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "http://localhost:3000",  # React frontend
         "http://localhost:8080", 
         "http://127.0.0.1:8080",
         "https://jusfinn.com",
         "https://www.jusfinn.com",
         settings.frontend_url
-    ],  # Frontend URLs
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(clients.router)
+# Create v1 API router
+v1_router = APIRouter(prefix="")
 
+# Include routers under v1 prefix
+v1_router.include_router(auth.router, tags=["Authentication"])
+v1_router.include_router(users.router, tags=["Users"])
+v1_router.include_router(companies.router, prefix="/companies", tags=["Companies"])
+v1_router.include_router(clients.router, tags=["Customers"])  # clients = customers
+v1_router.include_router(quotations.router, tags=["Sales Quotations"])
+v1_router.include_router(invoices.router, tags=["Tax Invoices"])
+v1_router.include_router(inventory.router, tags=["Inventory"])
+
+# Include the v1 router in the main app
+app.include_router(v1_router)
 
 @app.get("/")
 async def root():
@@ -76,15 +86,34 @@ async def root():
         "message": "Welcome to JusFinn Services API",
         "version": "1.0.0",
         "docs": "/docs",
-        "redoc": "/redoc"
+        "redoc": "/redoc",
+        "api_base": "/v1",
+        "status": "active"
     }
-
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "JusFinn Services API"}
 
+@app.get("/v1")
+async def api_info():
+    """API v1 information endpoint."""
+    return {
+        "version": "1.0.0",
+        "title": "JusFinn GST-Compliant Sales API",
+        "description": "Complete sales workflow management with GST compliance",
+        "endpoints": {
+            "companies": "/v1/companies",
+            "customers": "/v1/companies/{company_id}/customers", 
+            "quotations": "/v1/companies/{company_id}/quotations",
+            "invoices": "/v1/companies/{company_id}/tax-invoices",
+            "inventory": "/v1/companies/{company_id}/inventory",
+            "gstr1": "/v1/companies/{company_id}/gstr1",
+            "auth": "/v1/auth",
+            "docs": "/docs"
+        }
+    }
 
 if __name__ == "__main__":
     import uvicorn
