@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from config import settings
-from database import get_database
-from models import User, UserResponse
+from app.config import settings
+from app.database import get_database
+from app.models import User, UserResponse
 from bson import ObjectId
 import logging
 
@@ -85,81 +85,83 @@ class UserService:
             logger.error(f"Error getting user by email: {e}")
             return None
 
-    async def update_user_last_login(self, user_id: str) -> bool:
-        """Update user's last login timestamp."""
+    async def update_user(self, user_id: str, update_data: dict) -> Optional[User]:
+        """Update user data."""
         await self._ensure_db_connection()
         try:
-            result = await self.users_collection.update_one(
-                {"_id": ObjectId(user_id)},
-                {"$set": {"updated_at": datetime.utcnow()}}
-            )
-            return result.modified_count > 0
-        except Exception as e:
-            logger.error(f"Error updating user last login: {e}")
-            return False
-
-    async def update_user_tokens(self, user_id: str, access_token: str, refresh_token: Optional[str],
-                                 expires_in: int) -> bool:
-        """Update user's access and refresh tokens."""
-        await self._ensure_db_connection()
-        try:
-            # Calculate token expiry time
-            token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-
-            update_data = {
-                "access_token": access_token,
-                "token_expires_at": token_expires_at,
-                "updated_at": datetime.utcnow()
-            }
-
-            # Only update refresh_token if provided
-            if refresh_token:
-                update_data["refresh_token"] = refresh_token
-
+            update_data["updated_at"] = datetime.utcnow()
+            
             result = await self.users_collection.update_one(
                 {"_id": ObjectId(user_id)},
                 {"$set": update_data}
+            )
+            
+            if result.modified_count > 0:
+                return await self.get_user_by_id(user_id)
+            return None
+        except Exception as e:
+            logger.error(f"Error updating user: {e}")
+            return None
+
+    async def update_user_tokens(self, user_id: str, access_token: str, refresh_token: str, expires_at: datetime) -> bool:
+        """Update user's OAuth tokens."""
+        await self._ensure_db_connection()
+        try:
+            result = await self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {
+                    "$set": {
+                        "access_token": access_token,
+                        "refresh_token": refresh_token,
+                        "token_expires_at": expires_at,
+                        "updated_at": datetime.utcnow()
+                    }
+                }
             )
             return result.modified_count > 0
         except Exception as e:
             logger.error(f"Error updating user tokens: {e}")
             return False
 
-    async def refresh_user_tokens(self, user_id: str, new_access_token: str, new_refresh_token: Optional[str],
-                                  expires_in: int) -> bool:
-        """Refresh user's tokens (for token refresh flow)."""
-        return await self.update_user_tokens(user_id, new_access_token, new_refresh_token, expires_in)
-
-    async def get_user_tokens(self, user_id: str) -> Optional[dict]:
-        """Get user's current tokens."""
+    async def update_user_last_login(self, user_id: str) -> bool:
+        """Update user's last login timestamp."""
         await self._ensure_db_connection()
         try:
-            user_doc = await self.users_collection.find_one(
+            result = await self.users_collection.update_one(
                 {"_id": ObjectId(user_id)},
-                {"access_token": 1, "refresh_token": 1, "token_expires_at": 1}
-            )
-            if user_doc:
-                return {
-                    "access_token": user_doc.get("access_token"),
-                    "refresh_token": user_doc.get("refresh_token"),
-                    "token_expires_at": user_doc.get("token_expires_at")
+                {
+                    "$set": {
+                        "last_login": datetime.utcnow(),
+                        "updated_at": datetime.utcnow()
+                    }
                 }
-            return None
+            )
+            return result.modified_count > 0
         except Exception as e:
-            logger.error(f"Error getting user tokens: {e}")
-            return None
+            logger.error(f"Error updating user last login: {e}")
+            return False
 
-    async def is_token_expired(self, user_id: str) -> bool:
-        """Check if user's access token is expired."""
+    async def refresh_user_token(self, refresh_token: str) -> Optional[User]:
+        """Get user by refresh token for token refresh operations."""
+        await self._ensure_db_connection()
         try:
-            tokens = await self.get_user_tokens(user_id)
-            if not tokens or not tokens.get("token_expires_at"):
-                return True
-
-            return datetime.utcnow() > tokens["token_expires_at"]
+            user_doc = await self.users_collection.find_one({"refresh_token": refresh_token})
+            if user_doc:
+                user_doc = self._convert_objectid_to_string(user_doc)
+                return User(**user_doc)
+            return None
         except Exception as e:
-            logger.error(f"Error checking token expiry: {e}")
+            logger.error(f"Error getting user by refresh token: {e}")
+            return None
+
+    async def is_token_expired(self, user: User) -> bool:
+        """Check if user's access token is expired."""
+        if not user.token_expires_at:
             return True
+        
+        # Add some buffer time (5 minutes) to ensure token validity
+        buffer_time = timedelta(minutes=5)
+        return datetime.utcnow() + buffer_time >= user.token_expires_at
 
     async def list_users(self, skip: int = 0, limit: int = 100) -> list[UserResponse]:
         """List all users (paginated)."""

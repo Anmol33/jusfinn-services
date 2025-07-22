@@ -2,8 +2,8 @@ import httpx
 from datetime import datetime, timedelta
 from typing import Optional
 import secrets
-from config import settings
-from models import GoogleOAuth2Response, GoogleUserInfo
+from app.config import settings
+from app.models import GoogleOAuth2Response, GoogleUserInfo
 import logging
 
 logger = logging.getLogger(__name__)

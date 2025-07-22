@@ -1,14 +1,27 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
-from services.client_service import client_service
-from services.user_service import user_service
-from services.jwt_service import jwt_service
-from models import ClientResponse, ClientCreateRequest, ClientUpdateRequest
+from app.services.client_service import client_service
+from app.services.user_service import user_service
+from app.services.jwt_service import jwt_service
+from app.models import ClientResponse, ClientCreateRequest, ClientUpdateRequest
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
 
-async def get_user_google_id(token: dict = Depends(jwt_service.get_current_user)) -> str:
+async def get_user_id(token: dict = Depends(jwt_service.get_current_user)) -> str:
+    """Helper function to get user's ID from JWT token."""
+    try:
+        user_id = token.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
+        
+        user = await user_service.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        return user_id  # Return user_id directly instead of user.google_id
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
     """Helper function to get user's Google ID from JWT token."""
     try:
         user_id = token.get("sub")
@@ -27,11 +40,11 @@ async def get_user_google_id(token: dict = Depends(jwt_service.get_current_user)
 @router.post("/", response_model=ClientResponse)
 async def create_client(
     client_data: ClientCreateRequest,
-    user_google_id: str = Depends(get_user_google_id)
+    user_id: str = Depends(get_user_id)
 ):
     """Create a new client."""
     try:
-        client = await client_service.create_client(client_data, user_google_id)
+        client = await client_service.create_client(client_data, user_id)
         return client
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to create client: {str(e)}")
@@ -43,16 +56,16 @@ async def get_clients(
     limit: int = Query(100, ge=1, le=100),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
-    user_google_id: str = Depends(get_user_google_id)
+    user_id: str = Depends(get_user_id)
 ):
     """Get all clients for the current user with optional filtering."""
     try:
         if search:
-            clients = await client_service.search_clients(user_google_id, search, skip, limit)
+            clients = await client_service.search_clients(user_id, search, skip, limit)
         elif status:
-            clients = await client_service.get_clients_by_status(user_google_id, status, skip, limit)
+            clients = await client_service.get_clients_by_status(user_id, status, skip, limit)
         else:
-            clients = await client_service.get_clients_by_user(user_google_id, skip, limit)
+            clients = await client_service.get_clients_by_user(user_id, skip, limit)
         
         return clients
     except Exception as e:
@@ -62,11 +75,11 @@ async def get_clients(
 @router.get("/{client_id}", response_model=ClientResponse)
 async def get_client(
     client_id: str,
-    user_google_id: str = Depends(get_user_google_id)
+    user_id: str = Depends(get_user_id)
 ):
     """Get a specific client by ID."""
     try:
-        client = await client_service.get_client_by_id(client_id, user_google_id)
+        client = await client_service.get_client_by_id(client_id, user_id)
         if not client:
             raise HTTPException(status_code=404, detail="Client not found")
         return client
@@ -80,11 +93,11 @@ async def get_client(
 async def update_client(
     client_id: str,
     client_data: ClientUpdateRequest,
-    user_google_id: str = Depends(get_user_google_id)
+    user_id: str = Depends(get_user_id)
 ):
     """Update an existing client."""
     try:
-        client = await client_service.update_client(client_id, client_data, user_google_id)
+        client = await client_service.update_client(client_id, client_data, user_id)
         if not client:
             raise HTTPException(status_code=404, detail="Client not found")
         return client
@@ -97,11 +110,11 @@ async def update_client(
 @router.delete("/{client_id}")
 async def delete_client(
     client_id: str,
-    user_google_id: str = Depends(get_user_google_id)
+    user_id: str = Depends(get_user_id)
 ):
     """Delete a client."""
     try:
-        success = await client_service.delete_client(client_id, user_google_id)
+        success = await client_service.delete_client(client_id, user_id)
         if not success:
             raise HTTPException(status_code=404, detail="Client not found")
         return {"message": "Client deleted successfully"}
@@ -113,11 +126,11 @@ async def delete_client(
 
 @router.get("/stats/count")
 async def get_client_count(
-    user_google_id: str = Depends(get_user_google_id)
+    user_id: str = Depends(get_user_id)
 ):
     """Get total number of clients for the current user."""
     try:
-        count = await client_service.get_client_count(user_google_id)
+        count = await client_service.get_client_count(user_id)
         return {"count": count}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to get client count: {str(e)}")
@@ -125,13 +138,13 @@ async def get_client_count(
 
 @router.get("/stats/by-status")
 async def get_clients_stats(
-    user_google_id: str = Depends(get_user_google_id)
+    user_id: str = Depends(get_user_id)
 ):
     """Get client statistics by status."""
     try:
-        active_clients = await client_service.get_clients_by_status(user_google_id, "active")
-        inactive_clients = await client_service.get_clients_by_status(user_google_id, "inactive")
-        pending_clients = await client_service.get_clients_by_status(user_google_id, "pending")
+        active_clients = await client_service.get_clients_by_status(user_id, "active")
+        inactive_clients = await client_service.get_clients_by_status(user_id, "inactive")
+        pending_clients = await client_service.get_clients_by_status(user_id, "pending")
         
         return {
             "active": len(active_clients),
@@ -145,11 +158,11 @@ async def get_clients_stats(
 
 @router.get("/stats/dashboard")
 async def get_dashboard_statistics(
-    user_google_id: str = Depends(get_user_google_id)
+    user_id: str = Depends(get_user_id)
 ):
     """Get comprehensive client statistics for dashboard."""
     try:
-        stats = await client_service.get_client_statistics(user_google_id)
+        stats = await client_service.get_client_statistics(user_id)
         return stats
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to get dashboard statistics: {str(e)}") 

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from models import UserResponse
-from services.user_service import user_service
-from services.jwt_service import jwt_service
+from app.models import UserResponse
+from app.services.user_service import user_service
+from app.services.jwt_service import jwt_service
 
 router = APIRouter(prefix="/users", tags=["Users"])
 

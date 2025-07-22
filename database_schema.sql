@@ -12,13 +12,15 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 -- ============================================================================
 
 -- GST Registration Types
+-- GST Registration Types (used by customers table only)
 CREATE TYPE gst_registration_type AS ENUM (
     'REGULAR', 'COMPOSITION', 'INPUT_SERVICE_DISTRIBUTOR', 
     'TDS', 'TCS', 'NON_RESIDENT', 'OIDAR', 'EMBASSIES', 
     'UN_BODY', 'CASUAL_TAXABLE_PERSON'
 );
 
--- Payment Terms
+-- NOTE: payment_terms for vendors is now a simple VARCHAR field
+-- Legacy payment_terms enum kept for other tables that may still use it
 CREATE TYPE payment_terms AS ENUM (
     'IMMEDIATE', 'NET_15', 'NET_30', 'NET_45', 'NET_60', 'NET_90'
 );
@@ -35,7 +37,7 @@ CREATE TYPE order_status AS ENUM (
     'PARTIALLY_DELIVERED', 'DELIVERED', 'INVOICED', 'CANCELLED'
 );
 
--- TDS Sections
+-- TDS Sections (kept as enum for reference, vendors use VARCHAR for flexibility)
 CREATE TYPE tds_section AS ENUM (
     '194A', '194B', '194BB', '194C', '194D', '194DA', '194E', '194EE', 
     '194F', '194G', '194H', '194I', '194IA', '194IB', '194IC', '194J', 
@@ -48,7 +50,8 @@ CREATE TYPE itc_status AS ENUM (
     'ELIGIBLE', 'CLAIMED', 'REVERSED', 'BLOCKED', 'LAPSED'
 );
 
--- MSME Registration
+-- NOTE: MSME Registration enum removed - vendors now use simple is_msme BOOLEAN
+-- Legacy msme_registration enum kept for other tables that may still reference it
 CREATE TYPE msme_registration AS ENUM (
     'MICRO', 'SMALL', 'MEDIUM', 'NOT_APPLICABLE'
 );
@@ -594,19 +597,18 @@ CREATE TABLE payment_allocations (
 -- ============================================================================
 
 -- Vendor Master
+-- Vendors table for Purchase & Expense Management
 CREATE TABLE vendors (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id VARCHAR(255) NOT NULL,
     vendor_code VARCHAR(20) NOT NULL UNIQUE,
     business_name VARCHAR(255) NOT NULL,
     legal_name VARCHAR(255),
     gstin VARCHAR(15) UNIQUE,
     pan VARCHAR(10),
-    vendor_type VARCHAR(20) DEFAULT 'SUPPLIER' CHECK (vendor_type IN ('SUPPLIER', 'SERVICE_PROVIDER', 'CONTRACTOR')),
-    gst_registration_type gst_registration_type,
-    
-    -- MSME Information
-    msme_registration msme_registration DEFAULT 'NOT_APPLICABLE',
-    msme_number VARCHAR(20),
+
+    -- --- Critical Compliance Fields ---
+    is_msme BOOLEAN DEFAULT FALSE,
     udyam_registration_number VARCHAR(20),
     
     -- Primary Contact
@@ -615,10 +617,15 @@ CREATE TABLE vendors (
     email VARCHAR(100),
     website VARCHAR(255),
     
-    -- Credit Management
+    -- --- Payment & Terms ---
     credit_limit DECIMAL(15,2) DEFAULT 0,
     credit_days INTEGER DEFAULT 30,
-    payment_terms payment_terms DEFAULT 'NET_30',
+    payment_terms VARCHAR(20) DEFAULT 'NET_30',
+    
+    -- --- Critical Banking Fields ---
+    bank_account_number VARCHAR(50),
+    bank_ifsc_code VARCHAR(11),
+    bank_account_holder_name VARCHAR(255),
     
     -- Address
     address_line1 VARCHAR(255),
@@ -628,10 +635,10 @@ CREATE TABLE vendors (
     pincode VARCHAR(10),
     country VARCHAR(50) DEFAULT 'India',
     
-    -- TDS Information
-    tds_section tds_section,
-    tds_rate DECIMAL(5,2) DEFAULT 0,
+    -- --- Critical Tax & Accounting Fields ---
     tds_applicable BOOLEAN DEFAULT TRUE,
+    default_tds_section VARCHAR(10), -- e.g., "194J"
+    default_expense_ledger_id UUID, -- FK to accounting ledger
     
     -- Business Metrics
     vendor_rating INTEGER CHECK (vendor_rating BETWEEN 1 AND 5),
@@ -646,6 +653,26 @@ CREATE TABLE vendors (
     created_by UUID,
     updated_by UUID
 );
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_vendors_user_id ON vendors(user_id);
+CREATE INDEX IF NOT EXISTS idx_vendors_vendor_code ON vendors(vendor_code);
+CREATE INDEX IF NOT EXISTS idx_vendors_business_name ON vendors(business_name);
+CREATE INDEX IF NOT EXISTS idx_vendors_is_msme ON vendors(is_msme);
+CREATE INDEX IF NOT EXISTS idx_vendors_tds_applicable ON vendors(tds_applicable);
+CREATE INDEX IF NOT EXISTS idx_vendors_bank_ifsc ON vendors(bank_ifsc_code);
+CREATE INDEX IF NOT EXISTS idx_vendors_is_active ON vendors(is_active);
+
+-- Add table and column comments
+COMMENT ON TABLE vendors IS 'Vendor master table for purchase and expense management';
+COMMENT ON COLUMN vendors.is_msme IS 'Simplified MSME status - TRUE if vendor is MSME registered';
+COMMENT ON COLUMN vendors.udyam_registration_number IS 'Udyam Registration Number for MSME vendors';
+COMMENT ON COLUMN vendors.bank_account_number IS 'Vendor bank account number for payments';
+COMMENT ON COLUMN vendors.bank_ifsc_code IS 'Bank IFSC code for RTGS/NEFT transfers';
+COMMENT ON COLUMN vendors.bank_account_holder_name IS 'Name as per bank account';
+COMMENT ON COLUMN vendors.default_tds_section IS 'Default TDS section for this vendor (e.g. 194J)';
+COMMENT ON COLUMN vendors.default_expense_ledger_id IS 'Foreign key to default expense ledger';
+COMMENT ON COLUMN vendors.payment_terms IS 'Payment terms as string: IMMEDIATE, NET_15, NET_30, NET_45, NET_60, NET_90';
 
 -- Purchase Orders
 CREATE TABLE purchase_orders (
@@ -665,7 +692,7 @@ CREATE TABLE purchase_orders (
     total_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
     
     -- Status
-    status order_status DEFAULT 'DRAFT',
+    status purchaseorderstatus DEFAULT 'draft',
     
     -- Approval Workflow
     approval_status VARCHAR(20) DEFAULT 'PENDING' CHECK (approval_status IN ('PENDING', 'APPROVED', 'REJECTED')),

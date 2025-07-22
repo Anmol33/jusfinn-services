@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from services.google_oauth import google_oauth_service
-from services.user_service import user_service
-from services.jwt_service import jwt_service
-from models import User, UserResponse
-from database import get_database
-from config import settings
+from app.services.google_oauth import google_oauth_service
+from app.services.user_service import user_service
+from app.services.jwt_service import jwt_service
+from app.models import User, UserResponse
+from app.config import settings
+from datetime import datetime, timedelta
 import json
 import urllib.parse
 
@@ -43,7 +43,7 @@ async def google_callback(code: str, state: str = None):
                 existing_user.id,
                 token_response.access_token,
                 token_response.refresh_token,
-                token_response.expires_in
+                google_oauth_service.calculate_token_expiry(token_response.expires_in)
             )
             await user_service.update_user_last_login(existing_user.id)
             user = existing_user
