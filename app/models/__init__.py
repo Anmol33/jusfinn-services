@@ -333,8 +333,8 @@ class GoodsReceiptNote(Base):
     created_by = Column(UUID(as_uuid=True))
     updated_by = Column(UUID(as_uuid=True))
 
-class GRNItem(Base):
-    __tablename__ = "grn_items"
+class LegacyGRNItem(Base):
+    __tablename__ = "legacy_grn_items"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     grn_id = Column(UUID(as_uuid=True), ForeignKey('goods_receipt_notes.id'), nullable=False)

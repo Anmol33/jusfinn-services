@@ -25,6 +25,8 @@ class PurchaseOrderStatus(str, enum.Enum):
     COMPLETED = "completed"            # Invoiced and paid
     CANCELLED = "cancelled"            # Order cancelled
     REJECTED = "rejected"              # Approval rejected
+    PARTIALLY_RECEIVED = "partially_received"  # Some items received via GRN
+    FULLY_RECEIVED = "fully_received"  # All items received via GRN
 
 
 # Keep some supporting enums for specific actions/workflows
@@ -65,7 +67,7 @@ class PurchaseOrder(Base):
     
     __table_args__ = (
         CheckConstraint(
-            "status IN ('draft', 'pending_approval', 'approved', 'acknowledged', 'in_progress', 'partially_delivered', 'delivered', 'completed', 'cancelled', 'rejected')",
+            "status IN ('draft', 'pending_approval', 'approved', 'acknowledged', 'in_progress', 'partially_delivered', 'delivered', 'completed', 'cancelled', 'rejected', 'partially_received', 'fully_received')",
             name='valid_status_check'
         ),
     )
@@ -84,6 +86,7 @@ class PurchaseOrder(Base):
     # Relationships
     vendor = relationship("Vendor")
     items = relationship("PurchaseOrderItem", back_populates="purchase_order")
+    # grns = relationship("GRN", back_populates="purchase_order")  # Temporarily commented out
     # Simplified - remove complex approval relationships for now
 
 
@@ -99,6 +102,10 @@ class PurchaseOrderItem(Base):
     quantity = Column(Numeric(15, 3), nullable=False)
     unit_price = Column(Numeric(15, 2), nullable=False)
     total_amount = Column(Numeric(15, 2), nullable=False)
+    
+    # GRN tracking fields
+    received_quantity = Column(Numeric(15, 3), default=0)
+    pending_quantity = Column(Numeric(15, 3), default=0)  # Computed field
     
     # Relationships
     purchase_order = relationship("PurchaseOrder", back_populates="items")
@@ -206,6 +213,8 @@ class PurchaseOrderResponse(BaseModel):
     id: str
     po_number: str
     vendor_id: str
+    vendor_name: Optional[str] = None  # Add vendor business name
+    vendor_code: Optional[str] = None  # Add vendor code for reference
     po_date: datetime
     expected_delivery_date: Optional[datetime] = None
     subtotal: float

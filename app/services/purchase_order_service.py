@@ -6,6 +6,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import IntegrityError
 
 from app.database import get_postgres_session_direct
+from app.models.vendor_models import Vendor
 from app.models.purchase_order_models import (
     PurchaseOrder, PurchaseOrderItem, 
     PurchaseOrderCreateRequest, PurchaseOrderUpdateRequest, PurchaseOrderResponse, 
@@ -162,16 +163,25 @@ class PurchaseOrderService:
                 
                 print(f"🔍 DEBUG [SERVICE]: Creating response object...")
                 
+                # Load vendor information
+                vendor_result = await session.execute(
+                    select(Vendor).where(Vendor.id == new_po.vendor_id)
+                )
+                vendor = vendor_result.scalar_one_or_none()
+                
                 # DEBUG: Check each field individually to identify the NoneType issue
                 print(f"🔍 DEBUG [SERVICE]: new_po.id: {new_po.id}")
                 print(f"🔍 DEBUG [SERVICE]: new_po.po_number: {new_po.po_number}")
                 print(f"🔍 DEBUG [SERVICE]: new_po.vendor_id: {new_po.vendor_id} (type: {type(new_po.vendor_id)})")
+                print(f"🔍 DEBUG [SERVICE]: vendor: {vendor.business_name if vendor else 'Not found'}")
                 print(f"🔍 DEBUG [SERVICE]: new_po.status: {new_po.status} (type: {type(new_po.status)})")
                 
                 response = PurchaseOrderResponse(
                     id=str(new_po.id),
                     po_number=new_po.po_number,
                     vendor_id=str(new_po.vendor_id),
+                    vendor_name=vendor.business_name if vendor else "Unknown Vendor",
+                    vendor_code=vendor.vendor_code if vendor else None,
                     po_date=new_po.po_date,
                     expected_delivery_date=new_po.expected_delivery_date,
                     subtotal=float(new_po.subtotal),
@@ -374,10 +384,13 @@ class PurchaseOrderService:
         
         async with get_postgres_session_direct() as session:
             try:
-                # Build query with joinedload for items
+                # Build query with joinedload for items and vendor
                 query = (
                     select(PurchaseOrder)
-                    .options(joinedload(PurchaseOrder.items))
+                    .options(
+                        joinedload(PurchaseOrder.items),
+                        joinedload(PurchaseOrder.vendor)
+                    )
                     .where(PurchaseOrder.user_id == user_id)
                 )
                 
@@ -417,6 +430,8 @@ class PurchaseOrderService:
                             id=str(po.id),
                             po_number=po.po_number,
                             vendor_id=str(po.vendor_id),
+                            vendor_name=po.vendor.business_name if po.vendor else "Unknown Vendor",
+                            vendor_code=po.vendor.vendor_code if po.vendor else None,
                             po_date=po.po_date,
                             expected_delivery_date=po.expected_delivery_date,
                             subtotal=float(po.subtotal),
@@ -459,7 +474,10 @@ class PurchaseOrderService:
         async with get_postgres_session_direct() as session:
             result = await session.execute(
                 select(PurchaseOrder)
-                .options(joinedload(PurchaseOrder.items))
+                .options(
+                    joinedload(PurchaseOrder.items),
+                    joinedload(PurchaseOrder.vendor)
+                )
                 .where(
                     and_(
                         PurchaseOrder.id == po_id,
@@ -477,6 +495,8 @@ class PurchaseOrderService:
                 id=str(po.id),
                 po_number=po.po_number,
                 vendor_id=str(po.vendor_id),
+                vendor_name=po.vendor.business_name if po.vendor else "Unknown Vendor",
+                vendor_code=po.vendor.vendor_code if po.vendor else None,
                 po_date=po.po_date,
                 expected_delivery_date=po.expected_delivery_date,
                 subtotal=float(po.subtotal),

@@ -555,9 +555,9 @@ class GoodsReceiptNote(Base):
     purchase_order = relationship("PurchaseOrder")
     vendor = relationship("Vendor")
 
-# GRN Items table
-class GRNItem(Base):
-    __tablename__ = "grn_items"
+# Legacy GRN Items table (renamed to avoid conflict)
+class LegacyGRNItemV2(Base):
+    __tablename__ = "legacy_grn_items_v2"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     grn_id = Column(UUID(as_uuid=True), ForeignKey('goods_receipt_notes.id'), nullable=False)

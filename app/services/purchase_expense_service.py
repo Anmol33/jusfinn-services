@@ -6,11 +6,12 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.exc import IntegrityError
 from app.database import get_postgres_session_direct
 from app.services.purchase_order_service import purchase_order_service
+from app.models.grn_models import GRNItem
 from app.models import (
     # Import expense related models only
     ExpenseCreateRequest, ExpenseResponse,
     # Goods Receipt Note
-    GoodsReceiptNote, GRNItem,
+    GoodsReceiptNote,
     # Purchase Bills
     PurchaseBill, PurchaseBillItem, InvoiceStatusEnum,
     # Expenses
