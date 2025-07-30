@@ -517,50 +517,13 @@ class PurchaseOrderItem(Base):
     purchase_order = relationship("PurchaseOrder", back_populates="items")
 
 # Goods Receipt Notes table
-class GoodsReceiptNote(Base):
-    __tablename__ = "goods_receipt_notes"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_google_id = Column(String(255), nullable=False)  # Links to MongoDB user
-    grn_number = Column(String(50), nullable=False, unique=True)
-    po_id = Column(UUID(as_uuid=True), ForeignKey('purchase_orders.id'), nullable=False)
-    vendor_id = Column(UUID(as_uuid=True), ForeignKey('vendors.id'), nullable=False)
-    grn_date = Column(Date, nullable=False, default=datetime.utcnow)
-    
-    # Delivery Details
-    vendor_challan_number = Column(String(50))
-    vendor_challan_date = Column(Date)
-    vehicle_number = Column(String(20))
-    transporter_name = Column(String(255))
-    
-    # Status
-    status = Column(String(20), default='DRAFT')
-    
-    # Quality Check
-    quality_checked = Column(Boolean, default=False)
-    quality_checked_by = Column(UUID(as_uuid=True))
-    quality_checked_at = Column(DateTime)
-    quality_remarks = Column(Text)
-    
-    # Additional Information
-    remarks = Column(Text)
-    
-    # Audit
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(UUID(as_uuid=True))
-    updated_by = Column(UUID(as_uuid=True))
-    
-    # Relationships
-    purchase_order = relationship("PurchaseOrder")
-    vendor = relationship("Vendor")
 
 # Legacy GRN Items table (renamed to avoid conflict)
 class LegacyGRNItemV2(Base):
     __tablename__ = "legacy_grn_items_v2"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    grn_id = Column(UUID(as_uuid=True), ForeignKey('goods_receipt_notes.id'), nullable=False)
+    grn_id = Column(UUID(as_uuid=True), ForeignKey('goods_receipt_notes_v2.id'), nullable=False)
     po_item_id = Column(UUID(as_uuid=True), ForeignKey('purchase_order_items.id'), nullable=False)
     item_service_id = Column(UUID(as_uuid=True), ForeignKey('items_services.id'), nullable=False)
     ordered_quantity = Column(Numeric(15, 3), nullable=False)
@@ -575,7 +538,7 @@ class LegacyGRNItemV2(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    grn = relationship("GoodsReceiptNote")
+    grn = relationship("GoodsReceiptNoteV2")
     po_item = relationship("PurchaseOrderItem")
     item_service = relationship("ItemService")
 
@@ -589,7 +552,7 @@ class PurchaseBill(Base):
     vendor_bill_number = Column(String(50), nullable=False)
     vendor_id = Column(UUID(as_uuid=True), ForeignKey('vendors.id'), nullable=False)
     po_id = Column(UUID(as_uuid=True), ForeignKey('purchase_orders.id'))
-    grn_id = Column(UUID(as_uuid=True), ForeignKey('goods_receipt_notes.id'))
+    grn_id = Column(UUID(as_uuid=True), ForeignKey('goods_receipt_notes_v2.id'))
     bill_date = Column(Date, nullable=False)
     due_date = Column(Date, nullable=False)
     
@@ -642,7 +605,7 @@ class PurchaseBill(Base):
     # Relationships
     vendor = relationship("Vendor")
     purchase_order = relationship("PurchaseOrder")
-    grn = relationship("GoodsReceiptNote")
+    grn = relationship("GoodsReceiptNoteV2")
     place_of_supply_state = relationship("State")
 
 # Purchase Bill Items table

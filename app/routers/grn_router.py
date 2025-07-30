@@ -1,39 +1,49 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
-from typing import List, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.database import get_postgres_session
+from typing import List, Dict, Any, Optional
 from app.services.jwt_service import jwt_service
-from app.services.grn_service import GRNService
-from app.models.grn_models import GRNCreateRequest, GRNUpdateRequest, GRNResponse, GRNStatus, StatusChangeRequest, StatusChangeResponse
+from app.services.grn_service import grn_service
+from app.models.grn_models import GRNCreateRequest, GRNResponse
 
 router = APIRouter(prefix="/grns", tags=["GRN - Goods Receipt Note"])
 
-
 async def get_user_id(token: dict = Depends(jwt_service.get_current_user)) -> str:
-    user_id = token.get('sub') or token.get('user_id')
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token: no user ID found")
-    return user_id
-
-
-@router.post("/from-po/{po_id}", response_model=GRNResponse)
-async def create_grn_from_po(
-    po_id: str,
-    grn_data: GRNCreateRequest,
-    user_id: str = Depends(get_user_id),
-    session: AsyncSession = Depends(get_postgres_session)
-):
-    """Create GRN from Purchase Order"""
+    """Helper function to get user's ID from JWT token."""
+    print(f"🔍 GRN AUTH DEBUG: get_user_id called")
+    print(f"   Token: {token}")
+    
     try:
-        service = GRNService(session)
-        grn = await service.create_grn_from_po(po_id, grn_data, user_id)
+        user_id = token.get("sub")
+        print(f"🔍 GRN AUTH DEBUG: Extracted user_id from token: {user_id}")
+        
+        if not user_id:
+            print(f"🔍 GRN AUTH DEBUG: No user_id in token")
+            raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
+        
+        print(f"🔍 GRN AUTH DEBUG: Returning user_id: {user_id}")
+        return user_id
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"🔍 GRN AUTH DEBUG: Exception in get_user_id: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+@router.post("", response_model=GRNResponse)
+async def create_grn(
+    grn_data: GRNCreateRequest,
+    user_id: str = Depends(get_user_id)
+):
+    """Create a new Goods Receipt Note."""
+    try:
+        print(f"🔍 Creating GRN for user: {user_id}")
+        print(f"🔍 GRN data: {grn_data}")
+        
+        grn = await grn_service.create_grn(grn_data, user_id)
         return grn
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        print(f"❌ Error creating GRN: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create GRN: {str(e)}")
-
 
 @router.get("", response_model=List[GRNResponse])
 async def get_grns(
@@ -41,245 +51,193 @@ async def get_grns(
     limit: int = Query(100, ge=1, le=100),
     status: Optional[str] = Query(None),
     po_id: Optional[str] = Query(None),
-    user_id: str = Depends(get_user_id),
-    session: AsyncSession = Depends(get_postgres_session)
+    user_id: str = Depends(get_user_id)
 ):
-    """Get GRNs with filtering"""
+    """Get GRNs for user with optional filtering."""
     try:
-        service = GRNService(session)
-        grns = await service.get_grns(user_id, skip, limit, status, po_id)
+        print(f"🔍 Fetching GRNs for user: {user_id}")
+        print(f"🔍 Filters - skip: {skip}, limit: {limit}, status: {status}, po_id: {po_id}")
+        
+        grns = await grn_service.get_grns(
+            user_id=user_id,
+            skip=skip,
+            limit=limit,
+            status=status,
+            po_id=po_id
+        )
+        print(f"🔍 Found {len(grns)} GRNs")
         return grns
     except Exception as e:
+        print(f"❌ Error fetching GRNs: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch GRNs: {str(e)}")
 
-
 @router.get("/{grn_id}", response_model=GRNResponse)
-async def get_grn(
+async def get_grn_by_id(
     grn_id: str,
-    user_id: str = Depends(get_user_id),
-    session: AsyncSession = Depends(get_postgres_session)
+    user_id: str = Depends(get_user_id)
 ):
-    """Get specific GRN"""
+    """Get specific GRN by ID."""
     try:
-        service = GRNService(session)
-        grn = await service.get_grn_by_id(grn_id, user_id)
+        print(f"🔍 Fetching GRN {grn_id} for user: {user_id}")
+        
+        grn = await grn_service.get_grn_by_id(grn_id, user_id)
+        
         if not grn:
             raise HTTPException(status_code=404, detail="GRN not found")
+        
         return grn
     except HTTPException:
         raise
     except Exception as e:
+        print(f"❌ Error fetching GRN {grn_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch GRN: {str(e)}")
 
-
-@router.put("/{grn_id}", response_model=GRNResponse)
-async def update_grn(
-    grn_id: str,
-    grn_data: GRNUpdateRequest,
-    user_id: str = Depends(get_user_id),
-    session: AsyncSession = Depends(get_postgres_session)
-):
-    """Update existing GRN"""
-    try:
-        service = GRNService(session)
-        grn = await service.update_grn(grn_id, grn_data, user_id)
-        if not grn:
-            raise HTTPException(status_code=404, detail="GRN not found")
-        return grn
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update GRN: {str(e)}")
-
-
-@router.post("/{grn_id}/approve", response_model=StatusChangeResponse)
-async def approve_grn(
-    grn_id: str,
-    comments: Optional[str] = Query(None),
-    user_id: str = Depends(get_user_id),
-    session: AsyncSession = Depends(get_postgres_session)
-):
-    """Approve GRN"""
-    try:
-        service = GRNService(session)
-        success = await service.approve_grn(grn_id, user_id, comments)
-        if not success:
-            raise HTTPException(status_code=404, detail="GRN not found")
-        
-        return StatusChangeResponse(
-            success=True,
-            message="GRN approved successfully",
-            new_status=GRNStatus.APPROVED
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to approve GRN: {str(e)}")
-
-
-@router.post("/{grn_id}/reject", response_model=StatusChangeResponse)
-async def reject_grn(
-    grn_id: str,
-    reason: str = Query(..., description="Reason for rejection"),
-    user_id: str = Depends(get_user_id),
-    session: AsyncSession = Depends(get_postgres_session)
-):
-    """Reject GRN"""
-    try:
-        service = GRNService(session)
-        success = await service.reject_grn(grn_id, user_id, reason)
-        if not success:
-            raise HTTPException(status_code=404, detail="GRN not found")
-        
-        return StatusChangeResponse(
-            success=True,
-            message="GRN rejected successfully",
-            new_status=GRNStatus.REJECTED
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to reject GRN: {str(e)}")
-
-
-@router.patch("/{grn_id}/status", response_model=StatusChangeResponse)
-async def change_grn_status(
-    grn_id: str,
-    status_data: StatusChangeRequest,
-    user_id: str = Depends(get_user_id),
-    session: AsyncSession = Depends(get_postgres_session)
-):
-    """Change GRN status"""
-    try:
-        service = GRNService(session)
-        
-        # Create update request with just status
-        update_request = GRNUpdateRequest(
-            status=status_data.status,
-            notes=status_data.notes
-        )
-        
-        grn = await service.update_grn(grn_id, update_request, user_id)
-        if not grn:
-            raise HTTPException(status_code=404, detail="GRN not found")
-        
-        return StatusChangeResponse(
-            success=True,
-            message=f"GRN status changed to {status_data.status}",
-            new_status=status_data.status
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to change GRN status: {str(e)}")
-
-
 @router.get("/po/{po_id}/available-items")
-async def get_po_items_for_grn(
+async def get_po_available_items(
     po_id: str,
-    user_id: str = Depends(get_user_id),
-    session: AsyncSession = Depends(get_postgres_session)
+    user_id: str = Depends(get_user_id)
 ):
-    """Get PO items available for GRN creation"""
+    """Get available items from Purchase Order for GRN creation."""
     try:
-        from app.models.purchase_order_models import PurchaseOrder, PurchaseOrderItem
-        from sqlalchemy import select, and_
+        print(f"🔍 Fetching PO {po_id} available items for user: {user_id}")
         
-        # Verify PO exists and belongs to user
-        po_query = select(PurchaseOrder).where(
-            and_(
-                PurchaseOrder.id == po_id,
-                PurchaseOrder.user_id == user_id
-            )
-        )
-        po_result = await session.execute(po_query)
-        po = po_result.scalar_one_or_none()
-        
-        if not po:
-            raise HTTPException(status_code=404, detail="Purchase Order not found")
-        
-        # Get PO items
-        items_query = select(PurchaseOrderItem).where(PurchaseOrderItem.po_id == po_id)
-        items_result = await session.execute(items_query)
-        items = items_result.scalars().all()
-        
-        # Format response
-        return {
-            "po_id": str(po.id),
-            "po_number": po.po_number,
-            "vendor_id": str(po.vendor_id),
-            "items": [
-                {
-                    "id": str(item.id),
-                    "item_description": item.item_description,
-                    "unit": item.unit,
-                    "ordered_quantity": float(item.quantity),
-                    "received_quantity": float(item.received_quantity or 0),
-                    "pending_quantity": float(item.quantity - (item.received_quantity or 0)),
-                    "unit_price": float(item.unit_price),
-                    "total_amount": float(item.total_amount)
-                }
-                for item in items
-            ]
-        }
-    except HTTPException:
-        raise
+        po_items = await grn_service.get_po_available_items(po_id, user_id)
+        return po_items
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        print(f"❌ Error fetching PO items for {po_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch PO items: {str(e)}")
 
-
-@router.get("/dashboard/summary")
-async def get_grn_dashboard_summary(
-    user_id: str = Depends(get_user_id),
-    session: AsyncSession = Depends(get_postgres_session)
+@router.post("/from-po/{po_id}")
+async def create_grn_from_po(
+    po_id: str,
+    grn_data: Dict[str, Any],
+    user_id: str = Depends(get_user_id)
 ):
-    """Get GRN dashboard summary statistics"""
+    """Create GRN from specific Purchase Order (simplified interface)."""
     try:
-        from sqlalchemy import select, func, and_
-        from datetime import datetime, timedelta
+        print(f"🔍 Creating GRN from PO {po_id} for user: {user_id}")
+        print(f"🔍 GRN data: {grn_data}")
         
-        # Total GRNs by status
-        status_query = select(
-            GRN.status,
-            func.count(GRN.id).label('count')
-        ).where(GRN.user_id == user_id).group_by(GRN.status)
+        # Convert flexible dict to proper GRNCreateRequest
+        from datetime import datetime
         
-        status_result = await session.execute(status_query)
-        status_counts = {row.status: row.count for row in status_result}
-        
-        # Recent GRNs (last 30 days)
-        thirty_days_ago = datetime.now() - timedelta(days=30)
-        recent_query = select(func.count(GRN.id)).where(
-            and_(
-                GRN.user_id == user_id,
-                GRN.created_at >= thirty_days_ago
-            )
+        # Extract data with defaults
+        grn_request = GRNCreateRequest(
+            po_id=po_id,
+            grn_number=grn_data.get("grn_number"),
+            received_date=datetime.fromisoformat(grn_data.get("received_date", datetime.now().isoformat())),
+            received_by=grn_data.get("received_by", "System"),
+            warehouse_location=grn_data.get("warehouse_location", "Main Warehouse"),
+            items=grn_data.get("items", []),
+            delivery_note_number=grn_data.get("delivery_note_number"),
+            vehicle_number=grn_data.get("vehicle_number"),
+            driver_name=grn_data.get("driver_name"),
+            general_notes=grn_data.get("general_notes")
         )
-        recent_result = await session.execute(recent_query)
-        recent_count = recent_result.scalar() or 0
         
-        # Pending approvals
-        pending_count = status_counts.get(GRNStatus.PENDING_APPROVAL, 0)
+        grn = await grn_service.create_grn(grn_request, user_id)
         
-        # Total value received
-        value_query = select(func.sum(GRN.total_accepted_amount)).where(
-            and_(
-                GRN.user_id == user_id,
-                GRN.status == GRNStatus.APPROVED
-            )
-        )
-        value_result = await session.execute(value_query)
-        total_value = float(value_result.scalar() or 0)
+        # Return simple success response for frontend compatibility
+        return {
+            "success": True,
+            "message": "GRN created successfully",
+            "grn_id": grn.id,
+            "grn_number": grn.grn_number,
+            "po_id": po_id,
+            "grn": grn
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ Error creating GRN from PO {po_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create GRN from PO: {str(e)}") 
+
+@router.get("/po/{po_id}/grn-summary")
+async def get_po_grn_summary(
+    po_id: str,
+    user_id: str = Depends(get_user_id)
+):
+    """Get summary of all GRNs created against a specific Purchase Order."""
+    try:
+        print(f"🔍 Fetching GRN summary for PO {po_id} for user: {user_id}")
+        
+        po_grn_summary = await grn_service.get_po_grn_summary(po_id, user_id)
+        return po_grn_summary
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        print(f"❌ Error fetching PO GRN summary for {po_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch PO GRN summary: {str(e)}") 
+
+@router.put("/{grn_id}/complete")
+async def complete_draft_grn(
+    grn_id: str,
+    user_id: str = Depends(get_user_id)
+):
+    """Complete a draft GRN and update PO quantities."""
+    try:
+        print(f"🔄 Completing draft GRN {grn_id} for user: {user_id}")
+        
+        completed_grn = await grn_service.complete_draft_grn(grn_id, user_id)
+        return completed_grn
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ Error completing GRN {grn_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to complete GRN: {str(e)}")
+
+@router.put("/{grn_id}")
+async def update_grn(
+    grn_id: str,
+    grn_data: GRNCreateRequest,
+    user_id: str = Depends(get_user_id)
+):
+    """Update a GRN (only allowed for draft status)."""
+    try:
+        print(f"✏️ Updating GRN {grn_id} for user: {user_id}")
+        
+        updated_grn = await grn_service.update_grn(grn_id, grn_data, user_id)
+        return updated_grn
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ Error updating GRN {grn_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update GRN: {str(e)}") 
+
+@router.put("/{grn_id}/cancel")
+async def cancel_grn(
+    grn_id: str,
+    user_id: str = Depends(get_user_id)
+):
+    """Cancel a draft GRN."""
+    try:
+        print(f"🗑️ Cancelling GRN {grn_id} for user: {user_id}")
+        
+        cancelled_grn = await grn_service.cancel_grn(grn_id, user_id)
+        return cancelled_grn
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"❌ Error cancelling GRN {grn_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel GRN: {str(e)}") 
+
+@router.post("/fix-po-statuses")
+async def fix_po_statuses_for_completed_grns(
+    user_id: str = Depends(get_user_id)
+):
+    """Fix PO statuses for all completed GRNs that may have missed the status update."""
+    try:
+        print(f"🔧 Fixing PO statuses for completed GRNs for user: {user_id}")
+        
+        fixed_pos = await grn_service.fix_po_statuses_for_completed_grns(user_id)
         
         return {
-            "total_grns": sum(status_counts.values()),
-            "status_breakdown": status_counts,
-            "pending_approvals": pending_count,
-            "recent_grns": recent_count,
-            "total_value_received": total_value,
-            "average_grn_value": total_value / max(sum(status_counts.values()), 1)
+            "message": "PO statuses fixed successfully",
+            "fixed_pos": fixed_pos,
+            "count": len(fixed_pos)
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch dashboard summary: {str(e)}")
+        print(f"❌ Error fixing PO statuses: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fix PO statuses: {str(e)}") 

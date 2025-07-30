@@ -10,8 +10,7 @@ from app.models.vendor_models import Vendor
 from app.models.purchase_order_models import (
     PurchaseOrder, PurchaseOrderItem, 
     PurchaseOrderCreateRequest, PurchaseOrderUpdateRequest, PurchaseOrderResponse, 
-    POLineItemResponse, PurchaseOrderStatus, 
-    StatusChangeRequest, StatusChangeResponse, POStatusHistory
+    POLineItemResponse, PurchaseOrderStatus
 )
 
 

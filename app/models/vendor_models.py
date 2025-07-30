@@ -165,6 +165,6 @@ class Vendor(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(UUID(as_uuid=True))
-    updated_by = Column(UUID(as_uuid=True))
+    created_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
+    updated_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
     state = relationship("State")

@@ -7,7 +7,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 from sqlalchemy import Column, String, Text, Integer, Numeric, Boolean, DateTime, Date, ForeignKey, Enum as SQLEnum, CheckConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Relationship
 
 from app.database import Base
 
@@ -37,13 +37,6 @@ class ApprovalActionEnum(str, enum.Enum):
     REQUEST_CHANGES = "request_changes"
     CANCEL = "cancel"
 
-
-class ApprovalLevelEnum(str, enum.Enum):
-    LEVEL_1 = "level_1"  # Department/Team Lead
-    LEVEL_2 = "level_2"  # Manager
-    LEVEL_3 = "level_3"  # Director/Finance
-    FINANCE = "finance"  # Finance Team
-    ADMIN = "admin"     # Admin Override
 
 
 # Database Models
@@ -80,12 +73,12 @@ class PurchaseOrder(Base):
     # Audit
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(UUID(as_uuid=True))
-    updated_by = Column(UUID(as_uuid=True))
+    created_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
+    updated_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
     
     # Relationships
-    vendor = relationship("Vendor")
-    items = relationship("PurchaseOrderItem", back_populates="purchase_order")
+    vendor = relationship("Vendor", lazy="selectin")
+    items = relationship("PurchaseOrderItem", back_populates="purchase_order", lazy="selectin")
     # grns = relationship("GRN", back_populates="purchase_order")  # Temporarily commented out
     # Simplified - remove complex approval relationships for now
 
@@ -110,56 +103,6 @@ class PurchaseOrderItem(Base):
     # Relationships
     purchase_order = relationship("PurchaseOrder", back_populates="items")
 
-
-class POApprovalRule(Base):
-    """Defines approval rules based on amount thresholds and user roles"""
-    __tablename__ = "po_approval_rules"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(String(255), nullable=False)  # Organization/Company
-    
-    # Rule Configuration
-    rule_name = Column(String(100), nullable=False)
-    min_amount = Column(Numeric(15, 2), default=0)
-    max_amount = Column(Numeric(15, 2))  # NULL for unlimited
-    
-    # Approval Levels Required
-    level_1_required = Column(Boolean, default=True)
-    level_2_required = Column(Boolean, default=False)
-    level_3_required = Column(Boolean, default=False)
-    finance_approval_required = Column(Boolean, default=False)
-    
-    # Approver Configuration
-    level_1_approvers = Column(Text)  # JSON array of user IDs
-    level_2_approvers = Column(Text)  # JSON array of user IDs  
-    level_3_approvers = Column(Text)  # JSON array of user IDs
-    finance_approvers = Column(Text)  # JSON array of user IDs
-    
-    # Auto-approval settings
-    auto_approve_below = Column(Numeric(15, 2), default=0)
-    
-    # Status and Audit
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(String(255))
-    updated_by = Column(String(255))
-
-
-# Simple status history for audit trail (optional)
-class POStatusHistory(Base):
-    """Simple status change history for purchase orders"""
-    __tablename__ = "po_status_history"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    po_id = Column(UUID(as_uuid=True), ForeignKey('purchase_orders.id'), nullable=False)
-    
-    # Status change details
-    previous_status = Column(SQLEnum(PurchaseOrderStatus))
-    new_status = Column(SQLEnum(PurchaseOrderStatus), nullable=False)
-    changed_by = Column(String(255), nullable=False)
-    changed_at = Column(DateTime, default=datetime.utcnow)
-    notes = Column(Text)
 
 
 # Pydantic Models (API Request/Response)
@@ -240,16 +183,3 @@ class PurchaseOrderResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
-# Simple action request for status changes
-class StatusChangeRequest(BaseModel):
-    """Simplified request for changing purchase order status"""
-    status: PurchaseOrderStatus
-    notes: Optional[str] = None
-
-
-class StatusChangeResponse(BaseModel):
-    """Response model for status change operations"""
-    success: bool
-    message: str
-    new_status: PurchaseOrderStatus

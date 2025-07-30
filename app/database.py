@@ -111,6 +111,9 @@ postgres_engine = create_async_engine(
 metadata = MetaData()
 Base = declarative_base()
 
+# Import all models here to ensure they are registered with the Base
+from app.models import auth_models, client_models, vendor_models, purchase_order_models, grn_models, purchase_bill_models
+
 # Async session factory
 AsyncSessionFactory = async_sessionmaker(
     postgres_engine,
@@ -156,6 +159,11 @@ async def get_postgres_session() -> AsyncSession:
 def get_postgres_session_direct() -> AsyncSession:
     """Get PostgreSQL session for direct usage (not as dependency)."""
     return AsyncSessionFactory()
+
+async def create_all_tables():
+    async with postgres_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
 
 # =====================================================
 # COMBINED CONNECTION FUNCTIONS

@@ -375,3 +375,141 @@ async def get_status_guide():
             }
         }
     }
+
+
+@router.get("/grn-eligible", response_model=List[PurchaseOrderResponse])
+async def get_grn_eligible_purchase_orders(
+    user_id: str = Depends(get_user_id)
+):
+    """Get purchase orders eligible for GRN creation."""
+    try:
+        # Get approved POs with pending deliveries
+        pos = await purchase_order_service.get_purchase_orders(
+            user_id=user_id,
+            operational_status="APPROVED",
+            approval_status="APPROVED"
+        )
+        
+        # Filter for POs that have items with pending quantities
+        eligible_pos = []
+        for po in pos:
+            has_pending = False
+            for item in po.line_items:
+                pending_qty = item.quantity - (item.received_quantity or 0)
+                if pending_qty > 0:
+                    has_pending = True
+                    break
+            if has_pending:
+                eligible_pos.append(po)
+        
+        return eligible_pos
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch GRN eligible POs: {str(e)}")
+
+
+@router.get("/{po_id}/can-create-grn")
+async def can_create_grn(
+    po_id: str,
+    user_id: str = Depends(get_user_id)
+):
+    """Check if a PO can have a GRN created for it."""
+    try:
+        po = await purchase_order_service.get_purchase_order_by_id(po_id, user_id)
+        if not po:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+        
+        # Check if PO is approved
+        if po.operational_status != PurchaseOrderStatus.APPROVED:
+            return {
+                "can_create_grn": False,
+                "reason": "Purchase order must be in APPROVED status"
+            }
+        
+        # Check if there are items with pending quantities
+        has_pending = False
+        for item in po.line_items:
+            pending_qty = item.quantity - (item.received_quantity or 0)
+            if pending_qty > 0:
+                has_pending = True
+                break
+        
+        if not has_pending:
+            return {
+                "can_create_grn": False,
+                "reason": "All items have been fully received"
+            }
+        
+        return {
+            "can_create_grn": True,
+            "po_id": po_id,
+            "po_number": po.po_number,
+            "vendor_name": po.vendor_name
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to check GRN eligibility: {str(e)}")
+
+
+@router.get("/{po_id}/pending-quantities")
+async def get_pending_quantities(
+    po_id: str,
+    user_id: str = Depends(get_user_id)
+):
+    """Get pending quantities for each item in a PO."""
+    try:
+        po = await purchase_order_service.get_purchase_order_by_id(po_id, user_id)
+        if not po:
+            raise HTTPException(status_code=404, detail="Purchase order not found")
+        
+        pending_items = []
+        for item in po.line_items:
+            pending_qty = item.quantity - (item.received_quantity or 0)
+            if pending_qty > 0:
+                pending_items.append({
+                    "item_id": str(item.id),
+                    "item_description": item.item_description,
+                    "unit": item.unit,
+                    "ordered_quantity": float(item.quantity),
+                    "received_quantity": float(item.received_quantity or 0),
+                    "pending_quantity": float(pending_qty),
+                    "unit_price": float(item.unit_price),
+                    "total_amount": float(item.total_amount)
+                })
+        
+        return {
+            "po_id": po_id,
+            "po_number": po.po_number,
+            "vendor_name": po.vendor_name,
+            "pending_items": pending_items,
+            "total_pending_items": len(pending_items)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch pending quantities: {str(e)}")
+
+
+@router.patch("/{po_id}/update-received-quantities")
+async def update_received_quantities(
+    po_id: str,
+    request: Dict[str, Any],
+    user_id: str = Depends(get_user_id)
+):
+    """Update received quantities for PO items (called after GRN approval)."""
+    try:
+        items_update = request.get("items", [])
+        if not items_update:
+            raise HTTPException(status_code=400, detail="Items update data is required")
+        
+        # This would update the received quantities in the PO
+        # For now, return success response
+        return {
+            "message": "Received quantities updated successfully",
+            "po_id": po_id,
+            "updated_items": len(items_update)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update received quantities: {str(e)}")

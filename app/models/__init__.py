@@ -6,6 +6,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, validator
 from enum import Enum
 import enum
+import importlib.util
 
 # SQLAlchemy imports for PostgreSQL models
 from sqlalchemy import Column, String, Integer, DateTime, Boolean, Text, Numeric, Date, ForeignKey, Enum as SQLEnum
@@ -21,6 +22,7 @@ from app.database import Base
 from .auth_models import *
 from .client_models import *
 from .vendor_models import *
+from .purchase_bill_models import *
 
 # =====================================================
 # EXPENSE MODELS  
@@ -247,8 +249,8 @@ class ItemService(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(UUID(as_uuid=True))
-    updated_by = Column(UUID(as_uuid=True))
+    created_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
+    updated_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
 
 class BankAccount(Base):
     __tablename__ = "bank_accounts"
@@ -309,8 +311,8 @@ class BankReconciliation(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
 
-class GoodsReceiptNote(Base):
-    __tablename__ = "goods_receipt_notes"
+class GoodsReceiptNoteLegacy(Base):
+    __tablename__ = "goods_receipt_notes_legacy"  # Changed table name to avoid conflict
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_google_id = Column(String(255), nullable=False)
@@ -330,14 +332,15 @@ class GoodsReceiptNote(Base):
     remarks = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(UUID(as_uuid=True))
-    updated_by = Column(UUID(as_uuid=True))
+    created_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
+    updated_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
 
+# Legacy GRN Item model (keeping for backward compatibility)
 class LegacyGRNItem(Base):
     __tablename__ = "legacy_grn_items"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    grn_id = Column(UUID(as_uuid=True), ForeignKey('goods_receipt_notes.id'), nullable=False)
+    grn_id = Column(UUID(as_uuid=True), ForeignKey('goods_receipt_notes_legacy.id'), nullable=False)
     po_item_id = Column(UUID(as_uuid=True), nullable=False)
     item_service_id = Column(UUID(as_uuid=True), nullable=False)
     ordered_quantity = Column(Numeric(15, 3), nullable=False)
@@ -351,56 +354,8 @@ class LegacyGRNItem(Base):
     remarks = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-class PurchaseBill(Base):
-    __tablename__ = "purchase_bills"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_google_id = Column(String(255), nullable=False)
-    bill_number = Column(String(50), nullable=False)
-    vendor_bill_number = Column(String(50), nullable=False)
-    vendor_id = Column(UUID(as_uuid=True), ForeignKey('vendors.id'), nullable=False)
-    po_id = Column(UUID(as_uuid=True), nullable=True)
-    grn_id = Column(UUID(as_uuid=True), nullable=True)
-    bill_date = Column(Date, nullable=False)
-    due_date = Column(Date, nullable=False)
-    subtotal = Column(Numeric(15, 2), nullable=False, default=0)
-    discount_amount = Column(Numeric(15, 2), default=0)
-    cgst_amount = Column(Numeric(15, 2), default=0)
-    sgst_amount = Column(Numeric(15, 2), default=0)
-    igst_amount = Column(Numeric(15, 2), default=0)
-    cess_amount = Column(Numeric(15, 2), default=0)
-    tds_amount = Column(Numeric(15, 2), default=0)
-    total_amount = Column(Numeric(15, 2), nullable=False, default=0)
-    paid_amount = Column(Numeric(15, 2), default=0)
-    status = Column(SQLEnum(InvoiceStatusEnum), default=InvoiceStatusEnum.DRAFT)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(UUID(as_uuid=True))
-    updated_by = Column(UUID(as_uuid=True))
-
-class PurchaseBillItem(Base):
-    __tablename__ = "purchase_bill_items"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    bill_id = Column(UUID(as_uuid=True), ForeignKey('purchase_bills.id'), nullable=False)
-    item_service_id = Column(UUID(as_uuid=True), nullable=False)
-    po_item_id = Column(UUID(as_uuid=True), nullable=True)
-    grn_item_id = Column(UUID(as_uuid=True), nullable=True)
-    quantity = Column(Numeric(15, 3), nullable=False)
-    unit_price = Column(Numeric(15, 2), nullable=False)
-    discount_percentage = Column(Numeric(5, 2), default=0)
-    discount_amount = Column(Numeric(15, 2), default=0)
-    taxable_amount = Column(Numeric(15, 2), nullable=False)
-    cgst_rate = Column(Numeric(5, 2), default=0)
-    sgst_rate = Column(Numeric(5, 2), default=0)
-    igst_rate = Column(Numeric(5, 2), default=0)
-    cess_rate = Column(Numeric(5, 2), default=0)
-    cgst_amount = Column(Numeric(15, 2), default=0)
-    sgst_amount = Column(Numeric(15, 2), default=0)
-    igst_amount = Column(Numeric(15, 2), default=0)
-    cess_amount = Column(Numeric(15, 2), default=0)
-    total_amount = Column(Numeric(15, 2), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+# Note: PurchaseBill models moved to separate purchase_bill_models.py file
+# Import them from there to avoid conflicts
 
 class Expense(Base):
     __tablename__ = "expenses"
@@ -427,8 +382,8 @@ class Expense(Base):
     notes = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(UUID(as_uuid=True))
-    updated_by = Column(UUID(as_uuid=True))
+    created_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
+    updated_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
 
 class ExpenseCategory(Base):
     __tablename__ = "expense_categories"
@@ -461,8 +416,8 @@ class TDSTransaction(Base):
     certificate_generated_date = Column(Date)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(UUID(as_uuid=True))
-    updated_by = Column(UUID(as_uuid=True))
+    created_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
+    updated_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
 
 class ITCRecord(Base):
     __tablename__ = "itc_records"
@@ -502,8 +457,8 @@ class Shipment(Base):
     exchange_rate = Column(Numeric(10, 4), default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(UUID(as_uuid=True))
-    updated_by = Column(UUID(as_uuid=True))
+    created_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
+    updated_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
 
 class LandedCost(Base):
     __tablename__ = "landed_costs"
@@ -543,8 +498,8 @@ class VendorPayment(Base):
     clearance_date = Column(Date)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-    created_by = Column(UUID(as_uuid=True))
-    updated_by = Column(UUID(as_uuid=True))
+    created_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
+    updated_by = Column(String(255))  # Changed from UUID to String to accept MongoDB ObjectIds
 
 class VendorPaymentAllocation(Base):
     __tablename__ = "vendor_payment_allocations"
@@ -621,6 +576,3 @@ class ApprovalMatrix(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
-
-# Now import PO models from the separated file 
-from .purchase_order_models import *

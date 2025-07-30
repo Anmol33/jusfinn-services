@@ -27,7 +27,7 @@ load_environment()
 
 from app.config import settings
 from app.database import connect_databases, close_databases
-from app.routers import auth, users, clients, vendors, purchase_expense, purchase_order_router, bank, grn_router
+from app.routers import auth, users, clients, vendors, purchase_order_router, bank, grn_router, purchase_bill_router
 
 # Lifespan context manager for startup/shutdown events
 @asynccontextmanager
@@ -93,9 +93,9 @@ app.include_router(users.router)
 app.include_router(clients.router)
 app.include_router(vendors.router)
 app.include_router(purchase_order_router.router)
-app.include_router(purchase_expense.router)
 app.include_router(bank.router)
 app.include_router(grn_router.router)
+app.include_router(purchase_bill_router.router)
 
 @app.get("/")
 async def root():
